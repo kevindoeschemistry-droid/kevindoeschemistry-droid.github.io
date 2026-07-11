@@ -53,6 +53,9 @@
   .plist{margin:14px 0 4px;}
   .pli{padding:7px 10px;background:var(--panel2);border-radius:8px;margin-top:6px;font-size:14px;}
   #netStatus{color:#ffb56b;min-height:16px;margin-top:8px;font-size:12px;}
+  #chatIn{position:absolute;left:14px;bottom:94px;width:320px;z-index:5;
+    padding:9px 12px;border-radius:8px;border:1px solid #4da3ff;
+    background:rgba(12,17,28,.92);color:var(--ink);font-size:14px;outline:none;}
   table.score{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px;}
   table.score th{color:#93a1bd;font-size:11px;text-transform:uppercase;letter-spacing:1px;
     text-align:left;padding:6px 8px;border-bottom:1px solid #354263;}
@@ -63,6 +66,7 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<input id="chatIn" class="hidden" maxlength="80" placeholder="say something… (Enter to send, Esc to cancel)" autocomplete="off">
 
 <div id="menu" class="overlay">
   <div class="panel">
@@ -184,16 +188,16 @@ const SFX = (()=> {
 
 /* ============================== weapons ============================== */
 const WEAPONS = {
-  fists:  {name:'Fists',        type:'melee', dmg:7,  range:44, arc:1.7, rate:300,  speedMul:1.06, knock:120, snd:'thud'},
-  bat:    {name:'Baseball Bat', type:'melee', dmg:16, range:60, arc:2.3, rate:520,  speedMul:1.0,  knock:300, snd:'thud'},
-  katana: {name:'Katana',       type:'melee', dmg:24, range:64, arc:2.0, rate:470,  speedMul:1.08, knock:190, snd:'slice'},
-  sledge: {name:'Sledgehammer', type:'melee', dmg:42, range:66, arc:2.5, rate:1050, speedMul:0.8,  knock:460, snd:'thud'},
+  fists:  {name:'Fists',        type:'melee', dmg:7,  range:44, arc:1.7, rate:300,  speedMul:1.06, knock:120, lunge:150, snd:'thud'},
+  bat:    {name:'Baseball Bat', type:'melee', dmg:16, range:60, arc:2.3, rate:520,  speedMul:1.0,  knock:300, lunge:190, snd:'thud'},
+  katana: {name:'Katana',       type:'melee', dmg:24, range:64, arc:2.0, rate:470,  speedMul:1.08, knock:190, lunge:230, snd:'slice'},
+  sledge: {name:'Sledgehammer', type:'melee', dmg:42, range:66, arc:2.5, rate:1050, speedMul:0.8,  knock:460, lunge:130, snd:'thud'},
   glock:  {name:'Glock',        type:'gun', dmg:12, rate:270, ammo:32, spread:0.045, bspeed:830, auto:false, pellets:1, knock:60,  snd:'glock'},
   shotgun:{name:'Shotgun',      type:'gun', dmg:9,  rate:950, ammo:12, spread:0.24,  bspeed:770, auto:false, pellets:6, knock:320, snd:'shotgun'},
   ak:     {name:'AK-47',        type:'gun', dmg:10, rate:115, ammo:60, spread:0.075, bspeed:870, auto:true,  pellets:1, knock:50,  snd:'ak'},
   // Ballistick lab weapons
-  chainsaw:{name:'Chainsaw',    type:'melee', dmg:6,  range:52, arc:1.2, rate:130, speedMul:1.0,  knock:80,  snd:'saw'},
-  tazer:  {name:'Tazer',        type:'melee', dmg:10, range:48, arc:1.5, rate:800, speedMul:1.05, knock:60, stun:1.1, snd:'zap'},
+  chainsaw:{name:'Chainsaw',    type:'melee', dmg:6,  range:52, arc:1.2, rate:130, speedMul:1.0,  knock:80,  lunge:80,  snd:'saw'},
+  tazer:  {name:'Tazer',        type:'melee', dmg:10, range:48, arc:1.5, rate:800, speedMul:1.05, knock:60, stun:1.1, lunge:170, snd:'zap'},
   minigun:{name:'Chain Gun',    type:'gun', dmg:7,   rate:55,  ammo:150, spread:0.13, bspeed:850, auto:true,  pellets:1, knock:30,  snd:'minigun'},
   flamer: {name:'Flamethrower', type:'gun', dmg:3.5, rate:45,  ammo:120, spread:0.28, bspeed:330, auto:true,  pellets:2, knock:8, life:0.4, flame:true, snd:'flame'},
   rail:   {name:'Rail Gun',     type:'gun', dmg:70,  rate:1400,ammo:6,   spread:0,    bspeed:0,   auto:false, pellets:1, knock:400, beam:true, snd:'rail'},
@@ -261,6 +265,58 @@ const MAPS = [
 "#............F.............#",
 "#*.........................#",
 "############################"]},
+{ name:'Meltdown', rows:[
+"############################",
+"#*...........LL...........*#",
+"#....G.......LL.......S....#",
+"#...........LLLL...........#",
+"#...##......LLLL......##...#",
+"#...##.......LL.......##...#",
+"#.............H............#",
+"#..K...####........####..R.#",
+"#......#............#......#",
+"#......#......M.....#......#",
+"#..B...####........####..C.#",
+"#..........................#",
+"#...##.......LL.......##...#",
+"#...##......LLLL......##...#",
+"#...........LLLL...........#",
+"#....T.......LL.......A....#",
+"#*...........LL...........*#",
+"############################"]},
+{ name:'Runoff', rows:[
+"############################",
+"#*........#......#........*#",
+"#....F....#..R...#....T....#",
+"#..........................#",
+"#...LLL..............LLL...#",
+"#...LLL....##..##....LLL...#",
+"#..........#....#..........#",
+"#..G.......#..A.#.......S..#",
+"#..........#....#..........#",
+"#...LLL....##..##....LLL...#",
+"#...LLL..............LLL...#",
+"#..........................#",
+"#....B....#..H...#....K....#",
+"#*........#......#........*#",
+"############################"]},
+{ name:'Foundry', rows:[
+"############################",
+"#*........................*#",
+"#...G.................S....#",
+"#..........................#",
+"#....LLLL..........LLLL....#",
+"#....L..L....R.....L..L....#",
+"#....L..L....C.....L..L....#",
+"#....LLLL..........LLLL....#",
+"#..........................#",
+"#....##..............##....#",
+"#....##......M.......##....#",
+"#....##..............##....#",
+"#..........................#",
+"#...T.................H....#",
+"#*........................*#",
+"############################"]},
 ];
 
 const TILE = 48;
@@ -275,19 +331,20 @@ const DIFFS = {
 };
 
 /* ============================== world / map state ============================== */
-let grid=[], gw=0, gh=0, worldW=0, worldH=0, spawns=[], pads=[];
+let grid=[], gw=0, gh=0, worldW=0, worldH=0, spawns=[], pads=[], lavaTiles=[];
 
 function loadMap(mi){
   const rows = MAPS[mi].rows;
   gh = rows.length; gw = rows[0].length;
   for(const r of rows) if(r.length!==gw) console.error('Map row length mismatch:', MAPS[mi].name);
   worldW = gw*TILE; worldH = gh*TILE;
-  grid=[]; spawns=[]; pads=[];
+  grid=[]; spawns=[]; pads=[]; lavaTiles=[];
   for(let y=0;y<gh;y++){
     grid[y]=[];
     for(let x=0;x<gw;x++){
       const ch = rows[y][x];
-      grid[y][x] = ch==='#' ? 1 : 0;
+      grid[y][x] = ch==='#' ? 1 : (ch==='L' ? 2 : 0); // 2 = lava (walkable, deadly)
+      if(ch==='L') lavaTiles.push({x,y});
       const cx=x*TILE+TILE/2, cy=y*TILE+TILE/2;
       if(ch==='*') spawns.push({x:cx,y:cy});
       if(PAD_KEYS[ch]) pads.push({x:cx,y:cy,weapon:PAD_KEYS[ch],active:true,t:0,spin:rand(0,TAU)});
@@ -320,6 +377,16 @@ function bakeMap(){
         const sx=X+h(tx+9,ty)*30+8, sy=Y+h(tx,ty+9)*30+8;
         f.beginPath();f.moveTo(sx,sy);f.lineTo(sx+h(tx,ty+5)*18-9,sy+h(tx+5,ty)*18-9);f.stroke();
       }
+    } else if(grid[ty][tx]===2){ // lava: molten base with bright swirls
+      f.fillStyle='#7e2610'; f.fillRect(X,Y,TILE,TILE);
+      f.fillStyle='#a83d16';
+      f.beginPath();f.arc(X+6+h(tx,ty)*(TILE-12), Y+6+h(ty,tx)*(TILE-12), 8+h(tx+3,ty)*7, 0, TAU);f.fill();
+      f.fillStyle='#d0561d';
+      f.beginPath();f.arc(X+8+h(tx+7,ty)*(TILE-16), Y+8+h(tx,ty+7)*(TILE-16), 4+h(tx,ty+3)*5, 0, TAU);f.fill();
+      f.fillStyle='#ef8b2f';
+      f.beginPath();f.arc(X+10+h(tx+1,ty+1)*(TILE-20), Y+10+h(ty+5,tx)*(TILE-20), 2+h(tx,ty+9)*3, 0, TAU);f.fill();
+      f.strokeStyle='rgba(40,10,5,.5)'; f.lineWidth=2;
+      f.strokeRect(X+1,Y+1,TILE-2,TILE-2);
     }
   }
   // soft shadows cast by walls onto the floor (south + east)
@@ -422,7 +489,7 @@ function astar(sx,sy,tx,ty){
       const nx=n.x+dx, ny=n.y+dy;
       if(solid(nx,ny)) continue;
       if(dx&&dy && (solid(n.x+dx,n.y)||solid(n.x,n.y+dy))) continue; // no corner cutting
-      const g=n.g+(dx&&dy?1.414:1);
+      const g=n.g+(dx&&dy?1.414:1)+(grid[ny][nx]===2?6:0); // lava is passable but costly
       const kk=key(nx,ny);
       if(best.has(kk) && best.get(kk)<=g) continue;
       best.set(kk,g);
@@ -493,9 +560,20 @@ function damage(victim, attacker, dmg, dir, knock){
     addDecal(victim.x,victim.y,rand(12,17),.35);
     parts.push({x:victim.x,y:victim.y,vx:0,vy:0,t:2.5,max:2.5,type:'corpse',
       a:rand(0,TAU),color:victim.color});
-    addFeed(`${attacker?attacker.name:'??'}  [${WEAPONS[attacker?attacker.weapon:'fists'].name}]  ${victim.name}`,
-      attacker===player?'#ffd54d':(victim===player?'#ff6b78':'#c6d2ea'));
-    netEvent({e:'kill',aid:attacker?attacker.id:-1,vid:victim.id,w:attacker?attacker.weapon:'fists',x:victim.x,y:victim.y});
+    if(!attacker)
+      addFeed(`${victim.name} melted in the lava`, victim===player?'#ff6b78':'#ffa04d');
+    else
+      addFeed(`${attacker.name}  [${WEAPONS[attacker.weapon].name}]  ${victim.name}`,
+        attacker===player?'#ffd54d':(victim===player?'#ff6b78':'#c6d2ea'));
+    netEvent({e:'kill',aid:attacker?attacker.id:-1,vid:victim.id,w:attacker?attacker.weapon:'lava',x:victim.x,y:victim.y});
+    if(attacker && attacker.isBot && Math.random()<0.30){
+      const a2=attacker;
+      setTimeout(()=>{ if(running && sticks.includes(a2)) sayNet(a2,pick(TAUNT_KILL)); },rand(500,1600));
+    }
+    if(victim.isBot && Math.random()<0.18){
+      const v2=victim;
+      setTimeout(()=>{ if(running && sticks.includes(v2)) sayNet(v2,pick(TAUNT_DEATH)); },rand(700,2000));
+    }
     SFX.death();
   }
 }
@@ -509,6 +587,9 @@ function attack(s){
     s.swingT = Math.min(0.22, w.rate/1000*0.55);
     s.swingMax = s.swingT;
     s.swingHit = new Set();
+    // lunge forward with the swing, like the original
+    s.kx += Math.cos(s.angle)*(w.lunge||0);
+    s.ky += Math.sin(s.angle)*(w.lunge||0);
     SFX.swing();
     netEvent({e:'swing',id:s.id});
   } else {
@@ -644,6 +725,7 @@ function botThink(s,dt){
     if(b.repath<=0 || !b.path){
       b.path=astar(Math.floor(s.x/TILE),Math.floor(s.y/TILE),
         Math.floor(b.padGoal.x/TILE),Math.floor(b.padGoal.y/TILE)); b.pi=0; b.repath=1.2;
+      if(!b.path){ b.padGoal=null; b.state='roam'; } // unreachable — give up
     }
   } else {
     // roam
@@ -687,6 +769,7 @@ function update(dt){
     }
     s.invuln=Math.max(0,s.invuln-dt);
     s.cooldown=Math.max(0,s.cooldown-dt);
+    s.sayT=Math.max(0,(s.sayT||0)-dt);
     if(s.swingT>0){ s.swingT-=dt; meleeTick(s); }
 
     let mvx=0,mvy=0,spdMul=1;
@@ -721,6 +804,13 @@ function update(dt){
     s._vx=(s.x-px)/dt; s._vy=(s.y-py)/dt;
     s.kx*=Math.pow(0.0008,dt); s.ky*=Math.pow(0.0008,dt);
     s.walk = L>0 ? s.walk + dt*10 : 0;
+
+    // standing in lava burns
+    const lrow=grid[Math.floor(s.y/TILE)];
+    if(lrow && lrow[Math.floor(s.x/TILE)]===2){
+      s.lavaT=(s.lavaT||0)-dt;
+      if(s.lavaT<=0){ s.lavaT=0.35; damage(s,null,10,rand(0,TAU),0); }
+    } else s.lavaT=0;
 
     // weapon pad pickup
     for(const p of pads){
@@ -779,6 +869,7 @@ function update(dt){
     if(p.type==='blood'||p.type==='casing'){p.vx*=Math.pow(.01,dt);p.vy*=Math.pow(.01,dt);}
   }
   for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt;if(feed[i].t<=0)feed.splice(i,1);}
+  for(let i=chats.length-1;i>=0;i--){chats[i].t-=dt;if(chats[i].t<=0)chats.splice(i,1);}
 }
 
 /* ============================== rendering ============================== */
@@ -985,6 +1076,19 @@ function drawStick(s){
   g.fillStyle='rgba(0,0,0,.5)'; g.fillRect(-16,-20,32,4);
   g.fillStyle= s.hp>50?'#51d05e': s.hp>25?'#e8c33c':'#ee5454';
   g.fillRect(-16,-20,32*(s.hp/100),4);
+  // speech bubble
+  if(s.sayT>0 && s.sayText){
+    g.font='600 11px Segoe UI';
+    const txt=s.sayText.length>24?s.sayText.slice(0,24)+'…':s.sayText;
+    const tw=g.measureText(txt).width;
+    g.globalAlpha=clamp(s.sayT,0,1);
+    g.fillStyle='rgba(245,248,255,.95)';
+    rr(g,-tw/2-7,-52,tw+14,20,7); g.fill();
+    g.beginPath();g.moveTo(-4,-33);g.lineTo(4,-33);g.lineTo(0,-27);g.closePath();g.fill();
+    g.fillStyle='#111722';
+    g.fillText(txt,0,-38);
+    g.globalAlpha=1;
+  }
   g.restore();
 }
 
@@ -1033,6 +1137,16 @@ function render(){
   ctx.translate(-camX+sx,-camY+sy);
 
   if(floorC) ctx.drawImage(floorC,0,0);
+  // pulsing lava glow
+  if(lavaTiles.length){
+    const tnow=performance.now()/1000;
+    for(const lt of lavaTiles){
+      const lx=lt.x*TILE, ly=lt.y*TILE;
+      if(lx>camX+vw||ly>camY+vh||lx+TILE<camX||ly+TILE<camY) continue;
+      ctx.fillStyle=`rgba(255,140,40,${0.10+0.08*Math.sin(tnow*2.5+(lt.x*1.7+lt.y)*1.3)})`;
+      ctx.fillRect(lx,ly,TILE,TILE);
+    }
+  }
   if(wallC) ctx.drawImage(wallC,0,0);
   for(const p of pads) drawPad(p);
   // casings, sparks & corpses under sticks
@@ -1143,6 +1257,20 @@ function drawHUD(){
   g.font='700 11px Segoe UI'; g.fillStyle='#93a1bd';
   g.fillText('KILLS', vw-26, vh-26);
 
+  // chat log (bottom-left, above the health panel)
+  g.textAlign='left'; g.font='600 13px Segoe UI'; g.textBaseline='alphabetic';
+  chats.forEach((c,i)=>{
+    const y=vh-96-(chats.length-1-i)*19;
+    const label=c.name+':';
+    const w1=g.measureText(label).width, w2=g.measureText(c.text).width;
+    g.globalAlpha=clamp(c.t,0,1);
+    g.fillStyle='rgba(8,11,17,.5)';
+    g.fillRect(12,y-13,w1+w2+16,17);
+    g.fillStyle=c.color; g.fillText(label,16,y);
+    g.fillStyle='#e8edf7'; g.fillText(c.text,16+w1+6,y);
+  });
+  g.globalAlpha=1;
+
   // respawn message
   if(player.dead){
     g.textAlign='center';
@@ -1189,11 +1317,43 @@ function drawHUD(){
   }
 }
 
+/* ============================== chat ============================== */
+let chats=[];
+const TAUNT_KILL=['owned','get rekt','2 ez','ez clap','sit down lol','pwned','outplayed','skill issue','gg ez','bonk','sorry not sorry'];
+const TAUNT_DEATH=['lag!!','hax','bruh','ow','lucky shot','rematch. now.','my mouse slipped','nooo','I blame the map'];
+function addChat(s,text){
+  text=String(text).slice(0,80);
+  chats.push({name:s?s.name:'?', color:s?s.color:'#aaa', text, t:9});
+  if(chats.length>7) chats.shift();
+  if(s){ s.sayText=text.slice(0,60); s.sayT=4; }
+}
+function sayNet(s,text){ // single-player and host side: show locally + broadcast
+  addChat(s,text);
+  if(net&&net.mode==='host') netBroadcast({t:'chat',id:s.id,x:text});
+}
+function chatEl(){ return document.getElementById('chatIn'); }
+function openChat(){ chatEl().classList.remove('hidden'); chatEl().focus(); for(const k in keys)keys[k]=false; }
+function closeChat(){ chatEl().classList.add('hidden'); chatEl().blur(); }
+function sendChat(){
+  const text=chatEl().value.trim().slice(0,80);
+  chatEl().value=''; closeChat();
+  if(!text||!player||!running) return;
+  if(net&&net.mode==='client'){
+    addChat(player,text);
+    try{ net.conn&&net.conn.open&&net.conn.send({t:'chat',x:text}); }catch(e){}
+  } else sayNet(player,text);
+}
+
 /* ============================== input ============================== */
 const keys={};
 const mouse={x:0,y:0,down:false,fresh:false};
 window.addEventListener('keydown',e=>{
+  if(e.target && e.target.id==='chatIn') return; // typing, not playing
   const k=e.key.toLowerCase();
+  if(k==='enter' && running && chatEl().classList.contains('hidden') &&
+     $('menu').classList.contains('hidden') && $('results').classList.contains('hidden')){
+    e.preventDefault(); openChat(); return;
+  }
   keys[k]=true;
   if(k==='tab'){e.preventDefault();}
   if(k==='escape' && !e.repeat && running && !matchOver){
@@ -1240,7 +1400,7 @@ function startMatch(){
   netCleanup();
   cfg={diff:state.diff};
   loadMap(state.map);
-  sticks=[];bullets=[];parts=[];decals=[];feed=[];
+  sticks=[];bullets=[];parts=[];decals=[];feed=[];chats=[];
   player=makeStick(($('nameIn').value.trim()||'Player').slice(0,14), state.color, false);
   sticks.push(player);
   const names=[...BOT_NAMES].sort(()=>Math.random()-.5);
@@ -1290,6 +1450,11 @@ $('joinBtn').onclick=()=>{SFX.unlock();SFX.click();joinGame();};
 $('lobbyStart').onclick=()=>{SFX.click();hostStartMatch();};
 $('lobbyLeave').onclick=()=>{SFX.click();netLeave();};
 $('codeIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('joinBtn').click();});
+$('chatIn').addEventListener('keydown',e=>{
+  e.stopPropagation();
+  if(e.key==='Enter') sendChat();
+  else if(e.key==='Escape') closeChat();
+});
 
 /* ============================== online play (PeerJS / WebRTC) ============================== */
 const WKEYS=Object.keys(WEAPONS);
@@ -1372,6 +1537,13 @@ function hostOnData(conn,m){
     const i=conn._rec.stick.input;
     i.mvx=clamp(+m.x||0,-1,1); i.mvy=clamp(+m.y||0,-1,1);
     i.a=+m.a||0; i.down=!!m.d; if(m.f)i.fresh=true;
+  } else if(m.t==='chat' && conn._rec && conn._rec.stick){
+    const text=String(m.x||'').trim().slice(0,80);
+    if(!text) return;
+    addChat(conn._rec.stick,text);
+    for(const r of net.conns){
+      if(r.conn!==conn){ try{ r.conn.open&&r.conn.send({t:'chat',id:conn._rec.id,x:text}); }catch(e){} }
+    }
   }
 }
 function hostDrop(conn){
@@ -1390,7 +1562,7 @@ function hostStartMatch(){
   cfg={diff:state.diff};
   net.mapIdx=state.map;
   loadMap(state.map);
-  sticks=[];bullets=[];parts=[];decals=[];feed=[];net.events=[];
+  sticks=[];bullets=[];parts=[];decals=[];feed=[];chats=[];net.events=[];
   player=makeStick(($('nameIn').value.trim()||'Player').slice(0,14),state.color,false);
   sticks.push(player);
   for(const rec of net.conns){ rec.stick=null; newRemoteStick(rec); }
@@ -1474,6 +1646,9 @@ function clientOnData(m){
     clientRoster(m.roster);
   } else if(m.t==='snap'){
     if(running) applySnap(m);
+  } else if(m.t==='chat'){
+    const s=net.byId[m.id];
+    if(s) addChat(s,String(m.x||'').slice(0,80));
   } else if(m.t==='end'){
     clientEnd(m.rows);
   } else if(m.t==='full'){
@@ -1483,7 +1658,7 @@ function clientOnData(m){
 function clientEnter(mapIdx,roster,tl){
   netStatusMsg('');
   loadMap(mapIdx);
-  sticks=[];bullets=[];parts=[];decals=[];feed=[];net.byId={};
+  sticks=[];bullets=[];parts=[];decals=[];feed=[];chats=[];net.byId={};
   for(const r of roster){
     const s=makeStick(r.n,r.c,false); s.id=r.id;
     sticks.push(s); net.byId[r.id]=s;
@@ -1564,8 +1739,11 @@ function applyEvent(ev){
     addDecal(ev.x,ev.y,rand(12,17),.35);
     parts.push({x:ev.x,y:ev.y,vx:0,vy:0,t:2.5,max:2.5,type:'corpse',
       a:rand(0,TAU),color:v?v.color:'#888'});
-    addFeed(`${a?a.name:'??'}  [${(WEAPONS[ev.w]||WEAPONS.fists).name}]  ${v?v.name:'??'}`,
-      ev.aid===net.myId?'#ffd54d':(ev.vid===net.myId?'#ff6b78':'#c6d2ea'));
+    if(!a||ev.w==='lava')
+      addFeed(`${v?v.name:'??'} melted in the lava`, ev.vid===net.myId?'#ff6b78':'#ffa04d');
+    else
+      addFeed(`${a.name}  [${(WEAPONS[ev.w]||WEAPONS.fists).name}]  ${v?v.name:'??'}`,
+        ev.aid===net.myId?'#ffd54d':(ev.vid===net.myId?'#ff6b78':'#c6d2ea'));
     SFX.death();
   } else if(ev.e==='pick'){
     if(ev.id===net.myId) SFX.pickup();
@@ -1594,6 +1772,7 @@ function clientUpdate(dt){
   const me=player;
   for(const s of sticks){
     s.invuln=Math.max(0,s.invuln-dt);
+    s.sayT=Math.max(0,(s.sayT||0)-dt);
     if(s.swingT>0)s.swingT-=dt;
     if(s.stunT>0)s.stunT-=dt;
     if(s===me||!s.next)continue;
@@ -1652,12 +1831,15 @@ function clientUpdate(dt){
     if(p.type==='blood'||p.type==='casing'){p.vx*=Math.pow(.01,dt);p.vy*=Math.pow(.01,dt);}
   }
   for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt;if(feed[i].t<=0)feed.splice(i,1);}
+  for(let i=chats.length-1;i>=0;i--){chats[i].t-=dt;if(chats[i].t<=0)chats.splice(i,1);}
 }
 
 /* test hook — handy for debugging; online play is host-authoritative anyway */
 window.__sa={
   give:w=>{ if(player&&WEAPONS[w]){player.weapon=w;player.ammo=WEAPONS[w].ammo||0;} },
   step:n=>{ if(running&&(!net||net.mode!=='client')) for(let i=0;i<n;i++)update(STEP); },
+  tp:(x,y)=>{ if(player){player.x=x;player.y=y;} },
+  chats:()=>chats.map(c=>c.name+': '+c.text),
   snap:()=>({running,mode:net?net.mode:'sp',time:Math.round(timeLeft),
     sticks:sticks.map(s=>({n:s.name,x:Math.round(s.x),y:Math.round(s.y),hp:Math.round(s.hp),w:s.weapon,dead:s.dead,k:s.kills}))}),
 };
