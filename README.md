@@ -7,6 +7,9 @@ no downloads, online rooms with 4-letter codes.
 - **[Spellstorm](spellstorm/)** — turn-based wizard artillery: destructible
   terrain, 5 spellbooks (including Verdant healing magic), bots, hotseat,
   online rooms, chat, and sudden-death rising seas
+- **[Last Lunge](last-lunge/)** — fencing tug-of-war: three blade stances,
+  parries, disarms, sword throws, divekicks; kill to seize THE GO and escape
+  through your gate. Vs bot, local 2P, or online 1v1
 
 ---
 
