@@ -45,10 +45,23 @@
   .help b{color:#c6d2ea;}
   .banner{font-size:32px;font-weight:900;font-style:italic;margin-bottom:6px;}
   a{color:var(--accent2);}
+  #chatIn{position:absolute;left:14px;bottom:14px;width:320px;z-index:5;
+    padding:9px 12px;border-radius:8px;border:1px solid var(--accent);
+    background:rgba(12,17,28,.92);color:var(--ink);font-size:14px;outline:none;}
+  .netbar{display:flex;gap:10px;margin-top:10px;}
+  .netbar .half{flex:1;margin-top:0;}
+  .joinwrap{flex:1;display:flex;gap:8px;}
+  .joinwrap input{width:86px;text-align:center;text-transform:uppercase;font-weight:800;letter-spacing:3px;
+    padding:8px;border-radius:8px;border:1px solid #354263;background:var(--panel2);color:var(--ink);
+    font-size:15px;outline:none;}
+  .plist{margin:14px 0 4px;}
+  .pli{padding:7px 10px;background:var(--panel2);border-radius:8px;margin-top:6px;font-size:14px;}
+  #netStatus{color:#ffb56b;min-height:16px;margin-top:8px;font-size:12px;}
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<input id="chatIn" class="hidden" maxlength="80" placeholder="say something… (Enter to send, Esc to cancel)" autocomplete="off">
 
 <div id="menu" class="overlay">
   <div class="panel">
@@ -63,6 +76,14 @@
       <div><label>Turn timer</label><div class="opts" id="timeOpts"></div></div>
     </div>
     <button class="btn" id="playBtn">Begin the Duel</button>
+    <div class="netbar">
+      <button class="btn ghost half" id="hostBtn">Host Online Game</button>
+      <div class="joinwrap">
+        <input id="codeIn" type="text" maxlength="4" placeholder="CODE" autocomplete="off">
+        <button class="btn ghost half" id="joinBtn">Join</button>
+      </div>
+    </div>
+    <div id="netStatus"></div>
     <div class="help">
       <b>Mouse</b> aim · <b>hold click</b> charge, release to cast · <b>1–5</b> or click to pick spells ·
       <b>A/D</b> shuffle a few steps · some spells are <b>click-to-target</b> ·
@@ -80,6 +101,18 @@
   </div>
 </div>
 
+<div id="lobby" class="overlay hidden">
+  <div class="panel" style="text-align:center">
+    <div class="banner" style="color:var(--accent2)">LOBBY</div>
+    <div class="sub" id="lobbyCode"></div>
+    <div id="lobbyList" class="plist"></div>
+    <div><label>Bot wizards</label><div class="opts" id="lobbyBots" style="justify-content:center"></div></div>
+    <button class="btn" id="lobbyStart">Start Match</button>
+    <button class="btn ghost" id="lobbyLeave">Leave</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 "use strict";
 /* ============================ utils ============================ */
@@ -151,6 +184,12 @@ const SPELLS={
   sskin:  {name:'Stoneskin',   kind:'self', shield:25, cd:4, color:'#b0977a'},
   sgolem: {name:'Golem',       kind:'arc', dmg:0,  crater:0,  knock:0,   grav:1.1, uses:1, color:'#7d8a6a', golem:true},
 
+  vbolt:  {name:'Thorn Bolt',  kind:'arc', dmg:21, crater:22, knock:160, grav:1,   cd:0, color:'#7ddf6a'},
+  vheal:  {name:'Blooming Mend',kind:'self', heal:30, cd:3, color:'#7ddf6a'},
+  vwhip:  {name:'Lash Vine',   kind:'ray', dmg:12, knock:380, range:170, pull:true, cd:2, color:'#4fae4a'},
+  vbridge:{name:'Rootway',     kind:'arc', dmg:0,  crater:0,  knock:0,   grav:0.85,cd:2, color:'#5f8f3e', bridge:true, bridgeFill:'#5f8f3e'},
+  vtreant:{name:'Treant',      kind:'arc', dmg:0,  crater:0,  knock:0,   grav:1.1, uses:1, color:'#4fae4a', golem:true, treant:true},
+
   ishard: {name:'Ice Lance',   kind:'arc', dmg:22, crater:20, knock:150, grav:0.6, cd:0, color:'#8fd8ff'},
   iglace: {name:'Glacier',     kind:'arc', dmg:10, crater:0,  knock:80,  grav:1,   cd:2, color:'#bfeaff', build:{r:42,fill:'#a8d8ee'}},
   ifreeze:{name:'Deep Freeze', kind:'arc', dmg:14, crater:16, knock:60,  grav:0.8, cd:4, color:'#5fc8ff', freeze:true},
@@ -162,6 +201,7 @@ const BOOKS={
   Ember: ['fbolt','fclust','fjet','fleap','fnova'],
   Stone: ['srock','sbridge','squake','sskin','sgolem'],
   Frost: ['ishard','iglace','ifreeze','iward','iblizz'],
+  Verdant:['vbolt','vheal','vwhip','vbridge','vtreant'],
 };
 const BOOK_NAMES=Object.keys(BOOKS);
 const DIFFS={Easy:{err:14,pw:9}, Medium:{err:7,pw:5}, Hard:{err:2.5,pw:2}};
@@ -180,6 +220,7 @@ function solidAt(x,y){
   return mask[(y*TW+x)*4+3]>16;
 }
 function carve(x,y,r){
+  netEv({e:'carve',x:Math.round(x),y:Math.round(y),r:Math.round(r)});
   tctx.save();
   tctx.globalCompositeOperation='destination-out';
   tctx.beginPath();tctx.arc(x,y,r,0,TAU);tctx.fill();
@@ -189,6 +230,7 @@ function carve(x,y,r){
   tctx.restore();
 }
 function buildAt(x,y,r,fill,deferMask){
+  netEv({e:'build',x:Math.round(x),y:Math.round(y),r:Math.round(r),f:fill});
   tctx.save();
   tctx.globalCompositeOperation='source-over';
   tctx.fillStyle=fill;
@@ -259,6 +301,9 @@ function findSurface(x){
 let wizards=[], projectiles=[], parts=[], dmgNums=[], golems=[], feed=[];
 let phase='menu'; // aim | resolve | frozenskip | over
 let curIdx=0, turnTime=0, settleT=0, interT=0, stamina=0;
+let waterY=WATER_Y, turnCount=0, sudden=false;
+const SUDDEN_AT=24;
+let net=null; // null = local play, else {mode:'host'|'client', ...}
 let charging=false, charge=0, selSpell=0;
 let camX=0, camY=0, camTX=0, camTY=0, shake=0;
 let cfg={diff:'Medium',turnLimit:30};
@@ -271,11 +316,18 @@ function makeWizard(name,color,book,human){
     hp:100, shield:0, alive:true, frozen:false, facing:1,
     spells:BOOKS[book].map(id=>({id, cd:0, uses:SPELLS[id].uses||Infinity})),
     grounded:false, leaping:false, leapSpell:null,
+    id:-1, local:true, netWalk:0, sayT:0, sayText:'',
   };
 }
 const cur=()=>wizards[curIdx];
-function addFeed(text,color){ feed.unshift({text,color:color||'#c6d2ea',t:6}); if(feed.length>5)feed.pop(); }
-function addDmg(x,y,n,color){ dmgNums.push({x,y,t:1.4,n:Math.round(n),color:color||'#fff'}); }
+function addFeed(text,color){
+  feed.unshift({text,color:color||'#c6d2ea',t:6}); if(feed.length>5)feed.pop();
+  netEv({e:'feed',x:text,c:color});
+}
+function addDmg(x,y,n,color){
+  dmgNums.push({x,y,t:1.4,n:Math.round(n),color:color||'#fff'});
+  netEv({e:'dmg',x:Math.round(x),y:Math.round(y),n:Math.round(n),c:color});
+}
 
 function placeWizards(){
   const n=wizards.length;
@@ -315,6 +367,13 @@ function killWizard(w,attacker,how){
   for(let i=0;i<24;i++)
     parts.push({x:w.x,y:w.y-10,vx:rand(-200,200),vy:rand(-320,60),t:rand(.4,1),max:1,type:'bit',color:w.color});
   addFeed(attacker&&attacker!==w ? `${attacker.name} destroyed ${w.name}` : `${w.name} ${how}`,'#ffb3ab');
+  if(attacker&&attacker!==w&&!attacker.human&&Math.random()<0.5){
+    const a2=attacker;
+    setTimeout(()=>{ if(running&&wizards.includes(a2)&&a2.alive) addChat(a2,pick(WIZ_TAUNTS)); },rand(600,1600));
+  } else if(!w.human&&attacker&&Math.random()<0.35){
+    const v2=w;
+    setTimeout(()=>{ if(running&&wizards.includes(v2)) addChat(v2,pick(WIZ_WHINES)); },rand(800,2000));
+  }
   SFX.boomBig();
 }
 function explode(x,y,spell,owner,directHitW){
@@ -329,7 +388,7 @@ function explode(x,y,spell,owner,directHitW){
       if(spell.dmg>0) applyDamage(w,Math.max(4,spell.dmg*Math.max(.35,fall)),dir,spell.knock*fall,owner);
       else if(spell.knock>0){ w.vx+=Math.cos(dir)*spell.knock*fall; w.vy+=Math.sin(dir)*spell.knock*fall; w.grounded=false; }
       if(spell.freeze && w===directHitW && w.alive && w!==owner){
-        w.frozen=true; SFX.freeze();
+        w.frozen=true; sfxN('freeze');
         addFeed(`${w.name} is frozen solid!`,'#8fd8ff');
       }
     }
@@ -340,6 +399,7 @@ function explode(x,y,spell,owner,directHitW){
     if(d<R && spell.dmg>0){ g.hp-=spell.dmg*Math.max(.35,1-d/R); addDmg(g.x,g.y-30,spell.dmg,'#d8c9a8'); }
   }
   const big=spell.big||spell.crater>40;
+  netEv({e:'boom',x:Math.round(x),y:Math.round(y),r:spell.crater+18,c:spell.color,big:big?1:0});
   for(let i=0;i<(big?30:16);i++)
     parts.push({x,y,vx:rand(-280,280),vy:rand(-330,80),t:rand(.3,.8),max:.8,type:'spark',color:spell.color});
   parts.push({x,y,t:.3,max:.3,type:'flash',r:spell.crater+18});
@@ -364,7 +424,7 @@ function launchArc(w,sp,angle,power,ownerSpell){
   const sx=w.x+Math.cos(angle)*20, sy=w.y-20+Math.sin(angle)*20;
   projectiles.push({x:sx,y:sy,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,
     spell:sp,owner:w,t:8,split:sp.split,trail:[],bridgeLen:0});
-  SFX.cast();
+  sfxN('cast');
 }
 function castSpell(w,i,opt){ // opt: {angle,power} or {tx,ty}
   const sl=w.spells[i], sp=SPELLS[sl.id];
@@ -375,12 +435,19 @@ function castSpell(w,i,opt){ // opt: {angle,power} or {tx,ty}
     w.vx=Math.cos(opt.angle)*speed; w.vy=Math.sin(opt.angle)*speed;
     w.grounded=false; w.leaping=true; w.leapSpell=sp;
     for(let i2=0;i2<8;i2++)parts.push({x:w.x,y:w.y,vx:rand(-60,60),vy:rand(20,120),t:.5,max:.5,type:'spark',color:sp.color});
-    SFX.cast();
+    sfxN('cast');
   }
   else if(sp.kind==='self'){
-    w.shield=Math.min(50,w.shield+sp.shield);
+    if(sp.heal){
+      const before=w.hp;
+      w.hp=Math.min(100,w.hp+sp.heal);
+      addDmg(w.x,w.y-34,-(w.hp-before),'#7ddf6a');
+      for(let i2=0;i2<12;i2++)
+        parts.push({x:w.x+rand(-14,14),y:w.y-rand(0,30),vx:rand(-20,20),vy:rand(-90,-30),t:rand(.4,.8),max:.8,type:'spark',color:'#7ddf6a'});
+    }
+    if(sp.shield) w.shield=Math.min(50,w.shield+sp.shield);
     parts.push({x:w.x,y:w.y-14,t:.5,max:.5,type:'ring',r:30,color:sp.color});
-    SFX.shield();
+    sfxN('shield');
   }
   else if(sp.kind==='target'){ // blink
     let tx=opt.tx, ty=opt.ty;
@@ -390,7 +457,7 @@ function castSpell(w,i,opt){ // opt: {angle,power} or {tx,ty}
     for(let i2=0;i2<10;i2++)parts.push({x:w.x,y:w.y-12,vx:rand(-80,80),vy:rand(-80,80),t:.4,max:.4,type:'spark',color:sp.color});
     w.x=clamp(tx,20,TW-20); w.y=ty; w.vx=0;w.vy=0;w.grounded=false;
     for(let i2=0;i2<10;i2++)parts.push({x:w.x,y:w.y-12,vx:rand(-80,80),vy:rand(-80,80),t:.4,max:.4,type:'spark',color:sp.color});
-    SFX.warp();
+    sfxN('warp');
   }
   else if(sp.kind==='ray'){
     const a=opt.angle;
@@ -401,7 +468,8 @@ function castSpell(w,i,opt){ // opt: {angle,power} or {tx,ty}
         const ang=Math.atan2(o.y-12-(w.y-16),o.x-w.x);
         let da=Math.abs(((ang-a)%TAU+TAU*1.5)%TAU-Math.PI);
         if(da<0.55){
-          if(o.spells) applyDamage(o,sp.dmg,ang,sp.knock,w);
+          const kdir=sp.pull?ang+Math.PI:ang; // vines drag victims toward the caster
+          if(o.spells) applyDamage(o,sp.dmg,kdir,sp.knock,w);
           else { o.hp-=sp.dmg; addDmg(o.x,o.y-30,sp.dmg,'#d8c9a8'); }
         }
       }
@@ -422,7 +490,7 @@ function castSpell(w,i,opt){ // opt: {angle,power} or {tx,ty}
       projectiles.push({x:px,y:rand(-160,-20),vx:rand(-15,15),vy:rand(260,340),
         spell:sp,owner:w,t:9,trail:[],delay:k*0.12});
     }
-    SFX.cast();
+    sfxN('cast');
   }
   beginResolve();
 }
@@ -444,7 +512,7 @@ function projStep(p,dt){
     // bridge spells paint terrain behind themselves
     if(sp.bridge && p.trail.length>6){
       const b=p.trail[p.trail.length-6];
-      buildAt(b.x,b.y,9,'#8d9aa8',true);
+      buildAt(b.x,b.y,9,sp.bridgeFill||'#8d9aa8',true);
       p.bridgeLen++;
     }
     // splitter forks at apex
@@ -456,7 +524,7 @@ function projStep(p,dt){
       }
       p.dead=true; return;
     }
-    if(p.y>WATER_Y){ p.dead=true; splashAt(p.x); if(sp.bridge)refreshMask(); return; }
+    if(p.y>waterY){ p.dead=true; splashAt(p.x); if(sp.bridge)refreshMask(); return; }
     if(p.x<-80||p.x>TW+80||p.y>TH+50){ p.dead=true; if(sp.bridge)refreshMask(); return; }
     // wizard / golem direct hit
     let hitW=null;
@@ -471,10 +539,11 @@ function projStep(p,dt){
 }
 function resolveImpact(p,directW){
   const sp=p.spell;
-  if(sp.bridge){ refreshMask(); SFX.build(); return; }
-  if(sp.build){ buildAt(p.x,p.y-sp.build.r*0.4,sp.build.r,sp.build.fill); if(sp.dmg>0)explode(p.x,p.y,{...sp,crater:0,build:null},p.owner,directW); SFX.build(); return; }
+  if(sp.bridge){ refreshMask(); sfxN('build'); return; }
+  if(sp.build){ buildAt(p.x,p.y-sp.build.r*0.4,sp.build.r,sp.build.fill); if(sp.dmg>0)explode(p.x,p.y,{...sp,crater:0,build:null},p.owner,directW); sfxN('build'); return; }
   if(sp.quake){
     // shatter a column straight down
+    netEv({e:'rect',x:Math.round(p.x-24),y:Math.round(p.y-10),w:48,h:Math.round(TH-p.y+10)});
     tctx.save();tctx.globalCompositeOperation='destination-out';
     tctx.fillRect(p.x-24,p.y-10,48,TH-p.y+10);tctx.restore();refreshMask();
     for(const w of wizards){
@@ -485,9 +554,11 @@ function resolveImpact(p,directW){
     return;
   }
   if(sp.golem){
-    golems.push({x:p.x,y:p.y-10,vx:0,vy:0,hp:60,owner:p.owner,grounded:false,budget:0});
-    addFeed(`${p.owner.name} raised a golem`,'#c9d6b8');
-    SFX.golem();
+    const treant=!!sp.treant;
+    golems.push({x:p.x,y:p.y-10,vx:0,vy:0,hp:treant?50:60,maxHp:treant?50:60,
+      dmg:treant?18:15,kind:treant?'treant':'golem',owner:p.owner,grounded:false,budget:0});
+    addFeed(`${p.owner.name} ${treant?'grew a treant':'raised a golem'}`,'#c9d6b8');
+    sfxN('golem');
     return;
   }
   if(sp.cluster){
@@ -500,7 +571,7 @@ function resolveImpact(p,directW){
   explode(p.x,p.y,sp,p.owner,directW);
 }
 function splashAt(x){
-  for(let i=0;i<14;i++)parts.push({x:x+rand(-8,8),y:WATER_Y,vx:rand(-60,60),vy:rand(-260,-80),t:rand(.4,.8),max:.8,type:'drop'});
+  for(let i=0;i<14;i++)parts.push({x:x+rand(-8,8),y:waterY,vx:rand(-60,60),vy:rand(-260,-80),t:rand(.4,.8),max:.8,type:'drop'});
   SFX.splash();
 }
 
@@ -542,7 +613,7 @@ function entityPhysics(e,dt,isWizard){
     while(solidAt(e.x,e.y-26)&&e.vy<0){ e.vy=0; e.y+=1; }
   }
   e.x=clamp(e.x,14,TW-14);
-  if(e.y-8>WATER_Y){
+  if(e.y-8>waterY){
     if(isWizard&&e.alive){ splashAt(e.x); killWizard(e,null,'was claimed by the sea'); }
     else if(!isWizard&&e.hp>0){ splashAt(e.x); e.hp=0; }
   }
@@ -569,8 +640,8 @@ function golemStep(g,dt){
     g.budget-=step;
     if(dist(g.x,g.y,g.target.x,g.target.y)<44){
       g.budget=0;
-      applyDamage(g.target,15,Math.atan2(0,dir),220,g.owner);
-      SFX.golem();
+      applyDamage(g.target,g.dmg||15,Math.atan2(0,dir),220,g.owner);
+      sfxN('golem');
     }
   }
 }
@@ -602,12 +673,28 @@ function advanceTurn(){
   if(alive.length<=1){
     phase='over'; running=true;
     const win=alive[0];
-    $('resultBanner').textContent = win ? (win.human?'VICTORY!':'DEFEAT') : 'MUTUAL DESTRUCTION';
-    $('resultBanner').style.color = win&&win.human ? '#ffd54d' : '#4da3ff';
+    if(net&&net.mode==='host'){
+      netHostFlush(1); // final state + events
+      netBroadcast({t:'end',winner:win?win.id:-1});
+    }
+    const iWin=win&&win.human&&win.local;
+    $('resultBanner').textContent = win ? (iWin?'VICTORY!':(win.human?`${win.name.toUpperCase()} WINS`:'DEFEAT')) : 'MUTUAL DESTRUCTION';
+    $('resultBanner').style.color = iWin ? '#ffd54d' : '#4da3ff';
     $('resultSub').textContent = win ? `${win.name} rules the battlefield` : 'no wizard survived';
+    $('againBtn').classList.remove('hidden');
     $('results').classList.remove('hidden');
     SFX.win();
     return;
+  }
+  // sudden death: the sea rises every turn until only the peaks remain
+  turnCount++;
+  if(turnCount>=SUDDEN_AT){
+    if(!sudden){ sudden=true; addFeed('☠ THE SEA RISES — finish it!','#8fd8ff'); SFX.splash(); }
+    waterY=Math.max(420,waterY-20);
+    // anyone now underwater drowns immediately
+    for(const w2 of wizards) if(w2.alive&&w2.y-8>waterY){ splashAt(w2.x); killWizard(w2,null,'was swallowed by the rising sea'); }
+    const alive2=aliveWizards();
+    if(alive2.length<=1){ curIdx=alive2.length?wizards.indexOf(alive2[0]):curIdx; }
   }
   do{ curIdx=(curIdx+1)%wizards.length; }while(!wizards[curIdx].alive);
   startTurn();
@@ -623,7 +710,7 @@ function simArc(x,y,angle,power,sp,ignoreW){
     vy+=G*(sp.grav||1)*dt;
     px+=vx*dt; py+=vy*dt;
     for(const w of wizards) if(w.alive&&w!==ignoreW&&dist(px,py,w.x,w.y-12)<15) return {x:px,y:py,hit:w};
-    if(py>WATER_Y) return {x:px,y:py,water:true};
+    if(py>waterY) return {x:px,y:py,water:true};
     if(px<-60||px>TW+60) return {x:px,y:py,off:true};
     if(solidAt(px,py)) return {x:px,y:py};
   }
@@ -643,12 +730,13 @@ function botThink(w){
     if(sp.kind==='strike')prefer.push({i,score:sp.dmg*sp.count*0.5});
   }
   prefer.sort((a,b)=>b.score-a.score);
-  // shield when hurt
-  if(w.hp<40){
+  // shield or heal when hurt
+  if(w.hp<45){
     for(let i=0;i<w.spells.length;i++){
       const sp=SPELLS[w.spells[i].id];
-      if(sp.kind==='self'&&spellReady(w,i)&&w.shield<10&&Math.random()<0.6)
-        return {i,opt:{}};
+      if(sp.kind==='self'&&spellReady(w,i)&&Math.random()<0.65){
+        if(sp.heal||(sp.shield&&w.shield<10)) return {i,opt:{}};
+      }
     }
   }
   for(const cand of prefer){
@@ -710,6 +798,8 @@ function update(dt){
   }
   for(let i=dmgNums.length-1;i>=0;i--){dmgNums[i].t-=dt;dmgNums[i].y-=28*dt;if(dmgNums[i].t<=0)dmgNums.splice(i,1);}
   for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt;if(feed[i].t<=0)feed.splice(i,1);}
+  for(let i=chats.length-1;i>=0;i--){chats[i].t-=dt;if(chats[i].t<=0)chats.splice(i,1);}
+  for(const w of wizards) w.sayT=Math.max(0,(w.sayT||0)-dt);
 
   if(phase==='aim'){
     const w=cur();
@@ -720,8 +810,10 @@ function update(dt){
     // walking
     if(w.human){
       let mv=0;
-      if(keys['a']||keys['arrowleft'])mv=-1;
-      if(keys['d']||keys['arrowright'])mv=1;
+      if(uiControls(w)){
+        if(keys['a']||keys['arrowleft'])mv=-1;
+        if(keys['d']||keys['arrowright'])mv=1;
+      } else mv=w.netWalk||0; // remote human, host applies their input
       if(mv&&stamina>0){
         w.facing=mv;
         const step=64*dt;
@@ -806,7 +898,7 @@ function drawWizard(g,w,t){
   // staff
   g.strokeStyle='#7a5a33';g.lineWidth=2.5;g.lineCap='round';
   g.beginPath();g.moveTo(9,-4);g.lineTo(14,-30);g.stroke();
-  const bookColor={Arcane:'#c77dff',Ember:'#ff8f3f',Stone:'#b0977a',Frost:'#8fd8ff'}[w.book];
+  const bookColor={Arcane:'#c77dff',Ember:'#ff8f3f',Stone:'#b0977a',Frost:'#8fd8ff',Verdant:'#7ddf6a'}[w.book];
   g.fillStyle=bookColor;
   g.beginPath();g.arc(14.5,-32,3.4,0,TAU);g.fill();
   g.restore();
@@ -830,18 +922,47 @@ function drawWizard(g,w,t){
   g.fillStyle=w.hp>50?'#51d05e':w.hp>25?'#e8c33c':'#ee5454';
   g.fillRect(w.x-16,w.y-54,32*clamp(w.hp/100,0,1),4);
   if(w.shield>0){g.fillStyle='#8fd8ff';g.fillRect(w.x-16,w.y-49,32*(w.shield/50),2);}
+  // speech bubble
+  if(w.sayT>0&&w.sayText){
+    g.font='600 11px Segoe UI';
+    const txt=w.sayText.length>24?w.sayText.slice(0,24)+'…':w.sayText;
+    const tw=g.measureText(txt).width;
+    g.globalAlpha=clamp(w.sayT,0,1);
+    g.fillStyle='rgba(245,248,255,.95)';
+    g.beginPath();
+    g.roundRect?g.roundRect(w.x-tw/2-7,w.y-86,tw+14,20,7):g.rect(w.x-tw/2-7,w.y-86,tw+14,20);
+    g.fill();
+    g.beginPath();g.moveTo(w.x-4,w.y-67);g.lineTo(w.x+4,w.y-67);g.lineTo(w.x,w.y-61);g.closePath();g.fill();
+    g.fillStyle='#111722';g.textAlign='center';
+    g.fillText(txt,w.x,w.y-72);
+    g.globalAlpha=1;
+  }
 }
 function drawGolem(g,go){
   g.save();g.translate(go.x,go.y);
-  g.fillStyle='#7d8a6a';
-  g.beginPath();g.rect(-10,-26,20,24);g.fill();
-  g.fillStyle='#68755a';
-  g.beginPath();g.arc(0,-30,7,0,TAU);g.fill();
-  g.fillStyle='#ffd54d';
-  g.fillRect(-4,-32,3,3);g.fillRect(2,-32,3,3);
+  if(go.kind==='treant'){
+    g.fillStyle='#6d4a2a';
+    g.fillRect(-6,-24,12,24);
+    g.strokeStyle='#6d4a2a';g.lineWidth=4;g.lineCap='round';
+    g.beginPath();g.moveTo(-4,-14);g.lineTo(-14,-22);g.stroke();
+    g.beginPath();g.moveTo(4,-14);g.lineTo(14,-22);g.stroke();
+    g.fillStyle='#4fae4a';
+    g.beginPath();g.arc(0,-32,12,0,TAU);g.fill();
+    g.beginPath();g.arc(-9,-26,7,0,TAU);g.fill();
+    g.beginPath();g.arc(9,-26,7,0,TAU);g.fill();
+    g.fillStyle='#ffd54d';
+    g.fillRect(-4,-20,3,3);g.fillRect(2,-20,3,3);
+  } else {
+    g.fillStyle='#7d8a6a';
+    g.beginPath();g.rect(-10,-26,20,24);g.fill();
+    g.fillStyle='#68755a';
+    g.beginPath();g.arc(0,-30,7,0,TAU);g.fill();
+    g.fillStyle='#ffd54d';
+    g.fillRect(-4,-32,3,3);g.fillRect(2,-32,3,3);
+  }
   g.restore();
-  g.fillStyle='rgba(0,0,0,.5)';g.fillRect(go.x-14,go.y-44,28,3);
-  g.fillStyle='#c9d6b8';g.fillRect(go.x-14,go.y-44,28*clamp(go.hp/60,0,1),3);
+  g.fillStyle='rgba(0,0,0,.5)';g.fillRect(go.x-14,go.y-48,28,3);
+  g.fillStyle='#c9d6b8';g.fillRect(go.x-14,go.y-48,28*clamp(go.hp/(go.maxHp||60),0,1),3);
 }
 function render(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -866,14 +987,14 @@ function render(){
   ctx.drawImage(terrC,0,0);
 
   // water
-  ctx.fillStyle='rgba(40,90,150,.82)';
+  ctx.fillStyle=sudden?'rgba(60,80,160,.86)':'rgba(40,90,150,.82)';
   ctx.beginPath();
-  ctx.moveTo(-100,WATER_Y+6);
-  for(let x=-100;x<=TW+100;x+=24) ctx.lineTo(x,WATER_Y+6+Math.sin(x/60+t*2)*3);
+  ctx.moveTo(-100,waterY+6);
+  for(let x=-100;x<=TW+100;x+=24) ctx.lineTo(x,waterY+6+Math.sin(x/60+t*2)*(sudden?5:3));
   ctx.lineTo(TW+100,TH+100);ctx.lineTo(-100,TH+100);ctx.closePath();ctx.fill();
   ctx.strokeStyle='rgba(150,210,255,.5)';ctx.lineWidth=2;
   ctx.beginPath();
-  for(let x=-100;x<=TW+100;x+=24){const y=WATER_Y+6+Math.sin(x/60+t*2)*3; x===-100?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  for(let x=-100;x<=TW+100;x+=24){const y=waterY+6+Math.sin(x/60+t*2)*(sudden?5:3); x===-100?ctx.moveTo(x,y):ctx.lineTo(x,y);}
   ctx.stroke();
 
   for(const go of golems) if(go.hp>0) drawGolem(ctx,go);
@@ -916,9 +1037,9 @@ function render(){
   }
   ctx.globalAlpha=1;
 
-  // aim UI for active human
+  // aim UI for the wizard this machine controls
   const w=cur();
-  if(phase==='aim'&&w&&w.human&&w.alive){
+  if(phase==='aim'&&w&&uiControls(w)&&w.alive&&!hasCasted()){
     const sp=SPELLS[w.spells[selSpell].id];
     const a=Math.atan2(mouse.wy-(w.y-20),mouse.wx-w.x);
     w.facing=Math.cos(a)>=0?1:-1;
@@ -946,8 +1067,8 @@ function render(){
       ctx.beginPath();ctx.arc(mouse.wx,mouse.wy,10,0,TAU);ctx.stroke();
     } else if(sp.kind==='strike'){
       ctx.strokeStyle=sp.color;ctx.lineWidth=2;ctx.setLineDash([5,5]);
-      ctx.beginPath();ctx.moveTo(mouse.wx-sp.spread,80+oy);ctx.lineTo(mouse.wx-sp.spread,WATER_Y);
-      ctx.moveTo(mouse.wx+sp.spread,80+oy);ctx.lineTo(mouse.wx+sp.spread,WATER_Y);ctx.stroke();ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(mouse.wx-sp.spread,80+oy);ctx.lineTo(mouse.wx-sp.spread,waterY);
+      ctx.moveTo(mouse.wx+sp.spread,80+oy);ctx.lineTo(mouse.wx+sp.spread,waterY);ctx.stroke();ctx.setLineDash([]);
     } else if(sp.kind==='ray'){
       ctx.strokeStyle='rgba(255,143,63,.6)';ctx.lineWidth=2;
       ctx.beginPath();ctx.moveTo(w.x,w.y-16);
@@ -975,6 +1096,11 @@ function drawHUD(){
       g.fillText(Math.ceil(turnTime)+'s',vw/2,55);
     }
   }
+  if(sudden){
+    g.font='800 14px Segoe UI';g.textAlign='center';
+    g.fillStyle=`rgba(143,216,255,${0.6+0.4*Math.sin(performance.now()/300)})`;
+    g.fillText('☠ THE SEA RISES ☠',vw/2,80);
+  }
   // feed
   g.font='600 13px Segoe UI';g.textAlign='right';
   feed.forEach((f,i)=>{
@@ -983,8 +1109,8 @@ function drawHUD(){
   });
   g.globalAlpha=1;
 
-  // spell bar for active human
-  if(phase==='aim'&&w&&w.human){
+  // spell bar for the wizard this machine controls
+  if(phase==='aim'&&w&&uiControls(w)){
     const n=w.spells.length,S=56,gap=8;
     const bx=vw/2-(n*S+(n-1)*gap)/2, by=vh-S-14;
     g.textAlign='center';
@@ -1020,6 +1146,19 @@ function drawHUD(){
     g.font='600 10px Segoe UI';g.textAlign='left';
     g.fillStyle='#93a1bd';g.fillText('steps',bx+94,by-6);
   }
+  // chat log bottom-left
+  g.textAlign='left';g.font='600 13px Segoe UI';g.textBaseline='alphabetic';
+  chats.forEach((c,i)=>{
+    const y=vh-20-(chats.length-1-i)*19;
+    const label=c.name+':';
+    const w1=g.measureText(label).width,w2=g.measureText(c.text).width;
+    g.globalAlpha=clamp(c.t,0,1);
+    g.fillStyle='rgba(8,11,17,.5)';g.fillRect(12,y-13,w1+w2+16,17);
+    g.fillStyle=c.color;g.fillText(label,16,y);
+    g.fillStyle='#e8edf7';g.fillText(c.text,16+w1+6,y);
+  });
+  g.globalAlpha=1;
+
   // hp roster top-left
   g.textAlign='left';g.font='700 12px Segoe UI';
   wizards.forEach((z,i)=>{
@@ -1032,6 +1171,56 @@ function drawHUD(){
   });
 }
 
+/* ============================ chat ============================ */
+let chats=[];
+const WIZ_TAUNTS=['sizzled.','the earth obeys ME','you call that aim?','begone, apprentice','*bows*','magic missile never misses','skill issue, mortal','my grimoire is bigger'];
+const WIZ_WHINES=['my robe!!','I meant to do that','the wind cheated','ow ow ow','I shall return','curse you'];
+function addChat(w,text,fromNet){
+  text=String(text).slice(0,80);
+  chats.push({name:w?w.name:'?',color:w?w.color:'#aaa',text,t:9});
+  if(chats.length>7)chats.shift();
+  if(w){ w.sayText=text.slice(0,60); w.sayT=4; }
+  if(!fromNet&&net&&net.mode==='host') netBroadcast({t:'chat',id:w?w.id:-1,x:text});
+}
+function chatEl(){ return $('chatIn'); }
+function openChat(){ chatEl().classList.remove('hidden'); chatEl().focus(); for(const k in keys)keys[k]=false; }
+function closeChat(){ chatEl().classList.add('hidden'); chatEl().blur(); }
+function myWizard(){
+  if(net&&net.mode==='client') return wizards.find(z=>z.id===net.myId);
+  return wizards.find(z=>z.human&&z.local)||wizards[0];
+}
+function sendChat(){
+  const text=chatEl().value.trim().slice(0,80);
+  chatEl().value=''; closeChat();
+  if(!text||!running)return;
+  const me=myWizard();
+  if(net&&net.mode==='client'){
+    addChat(me,text,true);
+    try{ net.conn&&net.conn.open&&net.conn.send({t:'chat',x:text}); }catch(e){}
+  } else addChat(me,text);
+}
+
+/* which wizard does THIS machine control right now? */
+function uiControls(w){
+  if(!w)return false;
+  if(net&&net.mode==='client') return w.id===net.myId;
+  return w.human&&w.local;
+}
+function hasCasted(){
+  if(net&&net.mode==='client') return net.sentCast;
+  return cur()&&cur().casted;
+}
+function tryCast(i,opt){
+  const w=cur();
+  if(net&&net.mode==='client'){
+    if(net.sentCast)return;
+    net.sentCast=true;charging=false;
+    try{net.conn&&net.conn.open&&net.conn.send({t:'cast',i,opt});}catch(e){}
+    return;
+  }
+  castSpell(w,i,opt);
+}
+
 /* ============================ input ============================ */
 const keys={};
 const mouse={x:0,y:0,wx:0,wy:0,down:false};
@@ -1040,9 +1229,14 @@ function updWorldMouse(){
   mouse.wx=mouse.x+ox;mouse.wy=mouse.y+oy;
 }
 window.addEventListener('keydown',e=>{
+  if(e.target&&e.target.id==='chatIn')return;
   const k=e.key.toLowerCase();
+  if(k==='enter'&&running&&chatEl().classList.contains('hidden')&&
+     $('menu').classList.contains('hidden')&&$('results').classList.contains('hidden')){
+    e.preventDefault(); openChat(); return;
+  }
   keys[k]=true;
-  if(phase==='aim'&&cur()&&cur().human){
+  if(phase==='aim'&&uiControls(cur())&&!hasCasted()){
     const n=parseInt(k);
     if(n>=1&&n<=cur().spells.length){ if(spellReady(cur(),n-1)){selSpell=n-1;SFX.click();} }
   }
@@ -1054,7 +1248,7 @@ canvas.addEventListener('mousedown',e=>{
   mouse.down=true;updWorldMouse();
   if(phase!=='aim')return;
   const w=cur();
-  if(!w.human||w.casted)return;
+  if(!uiControls(w)||hasCasted())return;
   // spell bar click?
   const n=w.spells.length,S=56,gap=8;
   const bx=vw/2-(n*S+(n-1)*gap)/2,by=vh-S-14;
@@ -1065,10 +1259,10 @@ canvas.addEventListener('mousedown',e=>{
   }
   const sp=SPELLS[w.spells[selSpell].id];
   if(sp.kind==='arc'||sp.kind==='leap'){ charging=true;charge=20; }
-  else if(sp.kind==='target'){ castSpell(w,selSpell,{tx:mouse.wx,ty:mouse.wy}); }
-  else if(sp.kind==='strike'){ castSpell(w,selSpell,{tx:clamp(mouse.wx,60,TW-60),ty:mouse.wy}); }
-  else if(sp.kind==='ray'){ castSpell(w,selSpell,{angle:Math.atan2(mouse.wy-(w.y-16),mouse.wx-w.x)}); }
-  else if(sp.kind==='self'){ castSpell(w,selSpell,{}); }
+  else if(sp.kind==='target'){ tryCast(selSpell,{tx:mouse.wx,ty:mouse.wy}); }
+  else if(sp.kind==='strike'){ tryCast(selSpell,{tx:clamp(mouse.wx,60,TW-60),ty:mouse.wy}); }
+  else if(sp.kind==='ray'){ tryCast(selSpell,{angle:Math.atan2(mouse.wy-(w.y-16),mouse.wx-w.x)}); }
+  else if(sp.kind==='self'){ tryCast(selSpell,{}); }
 });
 window.addEventListener('mouseup',e=>{
   if(e.button!==0)return;
@@ -1076,13 +1270,18 @@ window.addEventListener('mouseup',e=>{
   if(phase==='aim'&&charging){
     const w=cur();
     charging=false;
-    if(w.human&&!w.casted){
+    if(uiControls(w)&&!hasCasted()){
       const a=Math.atan2(mouse.wy-(w.y-20),mouse.wx-w.x);
-      castSpell(w,selSpell,{angle:a,power:charge});
+      tryCast(selSpell,{angle:a,power:charge});
     }
   }
 });
 window.addEventListener('blur',()=>{for(const k in keys)keys[k]=false;charging=false;});
+$('chatIn').addEventListener('keydown',e=>{
+  e.stopPropagation();
+  if(e.key==='Enter')sendChat();
+  else if(e.key==='Escape')closeChat();
+});
 
 /* ============================ menu / flow ============================ */
 const state={terr:'Highlands',slots:[
@@ -1145,8 +1344,10 @@ buildOpts($('diffOpts'),Object.keys(DIFFS),'Medium',v=>cfg.diff=v);
 buildOpts($('timeOpts'),['20s','30s','45s'],'30s',v=>cfg.turnLimit=parseInt(v));
 
 function startMatch(){
+  netCleanup();
   genTerrain(state.terr);
-  wizards=[];projectiles=[];parts=[];dmgNums=[];golems=[];feed=[];
+  wizards=[];projectiles=[];parts=[];dmgNums=[];golems=[];feed=[];chats=[];
+  waterY=WATER_Y; turnCount=0; sudden=false;
   const usedNames=[...BOT_NAMES].sort(()=>Math.random()-.5);
   let bi=0;
   state.slots.forEach((s,i)=>{
@@ -1158,6 +1359,7 @@ function startMatch(){
   if(wizards.length<2){ // need at least one opponent
     wizards.push(makeWizard(usedNames[bi++],ROBES[wizards.length],pick(BOOK_NAMES),false));
   }
+  wizards.forEach((w,i)=>w.id=i);
   placeWizards();
   curIdx=0;running=true;phase='aim';
   camX=wizards[0].x;camY=wizards[0].y;
@@ -1166,15 +1368,350 @@ function startMatch(){
   $('results').classList.add('hidden');
 }
 $('playBtn').onclick=()=>{SFX.unlock();SFX.click();startMatch();};
-$('againBtn').onclick=()=>{SFX.click();startMatch();};
-$('menuBtn').onclick=()=>{SFX.click();running=false;phase='menu';$('results').classList.add('hidden');$('menu').classList.remove('hidden');};
+$('againBtn').onclick=()=>{SFX.click(); if(net&&net.mode==='host')hostStartMatch(); else if(!net)startMatch();};
+$('menuBtn').onclick=()=>{SFX.click(); if(net)netLeave(); else{running=false;phase='menu';$('results').classList.add('hidden');$('menu').classList.remove('hidden');}};
+$('hostBtn').onclick=()=>{SFX.unlock();SFX.click();hostGame();};
+$('joinBtn').onclick=()=>{SFX.unlock();SFX.click();joinGame();};
+$('lobbyStart').onclick=()=>{SFX.click();hostStartMatch();};
+$('lobbyLeave').onclick=()=>{SFX.click();netLeave();};
+$('codeIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('joinBtn').click();});
+buildOpts($('lobbyBots'),[0,1,2],1,v=>{if(net)net.bots=+v;});
+
+/* ============================ online play (PeerJS) ============================ */
+function netEv(ev){ if(net&&net.mode==='host')net.events.push(ev); }
+function sfxN(name){ if(SFX[name])SFX[name](); netEv({e:'sfx',s:name}); }
+function netStatusMsg(m){ $('netStatus').textContent=m||''; }
+function ensurePeerLib(){
+  if(typeof Peer==='undefined'){ netStatusMsg('Online play needs internet — reload once connected.'); return false; }
+  return true;
+}
+function makeCode(){ const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c=''; for(let i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)]; return c; }
+function netBroadcast(m){
+  if(!net||net.mode!=='host')return;
+  for(const r of net.conns){ try{ if(r.conn.open)r.conn.send(m); }catch(e){} }
+}
+function netCleanup(){ if(!net)return; const p=net.peer; net=null; try{p&&p.destroy();}catch(e){} }
+function netLeave(){
+  netCleanup();
+  running=false; phase='menu';
+  $('lobby').classList.add('hidden'); $('results').classList.add('hidden');
+  $('menu').classList.remove('hidden');
+}
+
+/* ---- hosting ---- */
+function hostGame(){
+  if(!ensurePeerLib())return;
+  netCleanup();
+  const code=makeCode();
+  net={mode:'host',code,peer:null,conns:[],events:[],sendT:0,bots:1};
+  netStatusMsg('Creating room…');
+  const peer=new Peer('sstorm-'+code.toLowerCase());
+  net.peer=peer;
+  peer.on('open',()=>{ if(net&&net.peer===peer){ netStatusMsg(''); showLobby(); } });
+  peer.on('error',err=>{
+    if(!net||net.peer!==peer)return;
+    if(err.type==='unavailable-id'){ netCleanup(); hostGame(); }
+    else { netStatusMsg('Network error: '+err.type); if(!running)netLeave(); }
+  });
+  peer.on('connection',conn=>{
+    conn.on('data',m=>hostOnData(conn,m));
+    conn.on('close',()=>hostDrop(conn));
+    conn.on('error',()=>hostDrop(conn));
+  });
+}
+function hostOnData(conn,m){
+  if(!net||net.mode!=='host'||!m)return;
+  if(m.t==='hi'&&!conn._rec){
+    if(running||net.conns.length>=3){ try{conn.send({t:'full',busy:running?1:0});}catch(e){} return; }
+    const rec={conn,name:String(m.n||'Wizard').slice(0,12),
+      book:BOOK_NAMES.includes(m.b)?m.b:pick(BOOK_NAMES),wiz:null};
+    conn._rec=rec; net.conns.push(rec);
+    try{conn.send({t:'welcome'});}catch(e){}
+    lobbyRefresh();
+  } else if(m.t==='cast'&&conn._rec&&conn._rec.wiz){
+    const w=conn._rec.wiz;
+    if(phase==='aim'&&cur()===w&&!w.casted){
+      const i=m.i|0;
+      if(i>=0&&i<w.spells.length&&spellReady(w,i)){
+        const o=m.opt||{};
+        castSpell(w,i,{angle:+o.angle||0,power:clamp(+o.power||50,10,100),
+          tx:clamp(+o.tx||w.x,0,TW),ty:clamp(+o.ty||w.y,-220,TH)});
+      }
+    }
+  } else if(m.t==='walk'&&conn._rec&&conn._rec.wiz){
+    conn._rec.wiz.netWalk=clamp(m.mv|0,-1,1);
+  } else if(m.t==='chat'&&conn._rec&&conn._rec.wiz){
+    const text=String(m.x||'').trim().slice(0,80);
+    if(!text)return;
+    addChat(conn._rec.wiz,text,true);
+    for(const r of net.conns){
+      if(r.conn!==conn){ try{ r.conn.open&&r.conn.send({t:'chat',id:conn._rec.wiz.id,x:text}); }catch(e){} }
+    }
+  }
+}
+function hostDrop(conn){
+  if(!net||net.mode!=='host')return;
+  const rec=conn._rec; if(!rec)return; conn._rec=null;
+  const ci=net.conns.indexOf(rec); if(ci>=0)net.conns.splice(ci,1);
+  if(rec.wiz&&rec.wiz.alive&&running){
+    killWizard(rec.wiz,null,'fled the battlefield');
+    if(phase==='aim'&&cur()===rec.wiz) beginResolve();
+  }
+  lobbyRefresh();
+}
+function hostStartMatch(){
+  if(!net||net.mode!=='host')return;
+  genTerrain(state.terr);
+  wizards=[];projectiles=[];parts=[];dmgNums=[];golems=[];feed=[];chats=[];
+  waterY=WATER_Y;turnCount=0;sudden=false;net.events=[];
+  const s0=state.slots[0];
+  const wz0=makeWizard((s0.name||'You').trim().slice(0,12)||'You',ROBES[0],
+    s0.book==='Random'?pick(BOOK_NAMES):s0.book,true);
+  wizards.push(wz0);
+  for(const rec of net.conns){
+    const w=makeWizard(rec.name,ROBES[wizards.length%4],rec.book,true);
+    w.local=false; rec.wiz=w; wizards.push(w);
+  }
+  const names=[...BOT_NAMES].sort(()=>Math.random()-.5); let bi=0;
+  for(let i=0;i<net.bots&&wizards.length<4;i++)
+    wizards.push(makeWizard(names[bi++],ROBES[wizards.length%4],pick(BOOK_NAMES),false));
+  if(wizards.length<2)
+    wizards.push(makeWizard(names[bi++],ROBES[1],pick(BOOK_NAMES),false));
+  wizards.forEach((w,i)=>w.id=i);
+  placeWizards();
+  curIdx=0; running=true;
+  for(const id of ['menu','lobby','results']) $(id).classList.add('hidden');
+  const png=terrC.toDataURL('image/png');
+  const roster=wizards.map(w=>({id:w.id,n:w.name,c:w.color,b:w.book,h:w.human?1:0}));
+  for(const rec of net.conns){
+    try{ rec.conn.send({t:'start',png,roster,you:rec.wiz.id,cfg:{turnLimit:cfg.turnLimit},wy:waterY}); }catch(e){}
+  }
+  startTurn();
+}
+function netHostFlush(rdt){
+  net.sendT-=rdt;
+  if(net.sendT>0)return;
+  net.sendT=0.08;
+  netBroadcast({t:'snap',
+    ph:phase,cur:cur()?cur().id:-1,tt:+turnTime.toFixed(1),
+    wy:Math.round(waterY),sd:sudden?1:0,st:Math.round(stamina),
+    w:wizards.map(z=>[z.id,Math.round(z.x),Math.round(z.y),Math.round(z.hp),Math.round(z.shield),
+      z.frozen?1:0,z.alive?1:0,z.facing,
+      z.spells.map(sl=>[sl.cd,sl.uses===Infinity?-1:sl.uses])]),
+    g:golems.map(g=>[Math.round(g.x),Math.round(g.y),Math.round(g.hp),g.maxHp||60,g.kind==='treant'?1:0]),
+    p:projectiles.filter(p=>!(p.delay>0)).map(p=>[Math.round(p.x),Math.round(p.y),p.spell.color]),
+    e:net.events});
+  net.events=[];
+}
+
+/* ---- lobby ---- */
+function showLobby(){
+  netStatusMsg('');
+  $('menu').classList.add('hidden');
+  $('lobby').classList.remove('hidden');
+  const host=net&&net.mode==='host';
+  $('lobbyCode').innerHTML=host
+    ?'Room code: <b style="color:var(--accent);font-size:24px;letter-spacing:4px">'+net.code+'</b><br>Friends open this page, enter the code, and Join.'
+    :'Connected! Waiting for the host to start…';
+  $('lobbyStart').classList.toggle('hidden',!host);
+  $('lobbyBots').parentElement.classList.toggle('hidden',!host);
+  lobbyRefresh();
+}
+function lobbyRefresh(){
+  if(!net||net.mode!=='host')return;
+  const names=[(state.slots[0].name||'You')+' (you)',...net.conns.map(r=>r.name)];
+  $('lobbyList').innerHTML=names.map(n=>'<div class="pli">'+n+'</div>').join('');
+  netBroadcast({t:'lobby',names});
+}
+
+/* ---- joining ---- */
+function joinGame(){
+  if(!ensurePeerLib())return;
+  const code=($('codeIn').value||'').trim().toUpperCase();
+  if(code.length!==4){ netStatusMsg('Enter the 4-character room code.'); return; }
+  netCleanup();
+  netStatusMsg('Connecting…');
+  net={mode:'client',peer:null,conn:null,myId:-1,sentCast:false,prevKey:'',walkOut:0,
+    opQ:[],ready:false,maskDirty:false,curId:-1};
+  const peer=new Peer(); net.peer=peer;
+  peer.on('error',err=>{
+    if(!net||net.peer!==peer)return;
+    netStatusMsg(err.type==='peer-unavailable'?('Room "'+code+'" not found.'):'Network error: '+err.type);
+    if(!running)netCleanup();
+  });
+  peer.on('open',()=>{
+    if(!net||net.peer!==peer)return;
+    const conn=peer.connect('sstorm-'+code.toLowerCase(),{reliable:true});
+    net.conn=conn;
+    conn.on('open',()=>{ try{conn.send({t:'hi',n:(state.slots[0].name||'Wizard').trim().slice(0,12)||'Wizard',b:state.slots[0].book});}catch(e){} });
+    conn.on('data',clientOnData);
+    conn.on('close',()=>{ if(net&&net.peer===peer){ netLeave(); netStatusMsg('Disconnected from host.'); } });
+  });
+}
+function clientOnData(m){
+  if(!net||net.mode!=='client'||!m)return;
+  if(m.t==='welcome'){ showLobby(); }
+  else if(m.t==='lobby'){ if(m.names)$('lobbyList').innerHTML=m.names.map(n=>'<div class="pli">'+n+'</div>').join(''); }
+  else if(m.t==='start'){ clientEnter(m); }
+  else if(m.t==='snap'){ if(running)applySnap(m); }
+  else if(m.t==='chat'){
+    const w=wizards.find(z=>z.id===m.id);
+    addChat(w||null,String(m.x||''),true);
+  }
+  else if(m.t==='end'){ clientEnd(m); }
+  else if(m.t==='full'){ netLeave(); netStatusMsg(m.busy?'Match already in progress.':'That room is full.'); }
+}
+function genTerrainBlank(){
+  terrC=document.createElement('canvas');terrC.width=TW;terrC.height=TH;
+  tctx=terrC.getContext('2d',{willReadFrequently:true});
+  refreshMask();
+}
+function clientEnter(m){
+  wizards=[];projectiles=[];parts=[];dmgNums=[];golems=[];feed=[];chats=[];
+  waterY=m.wy||WATER_Y; turnCount=0; sudden=false;
+  cfg.turnLimit=(m.cfg&&m.cfg.turnLimit)||30;
+  net.myId=m.you; net.sentCast=false; net.prevKey='';
+  m.roster.forEach(r=>{
+    const w=makeWizard(r.n,r.c,r.b,!!r.h);
+    w.local=false; w.id=r.id; wizards.push(w);
+  });
+  genTerrainBlank();
+  net.ready=false; net.opQ=[];
+  const img=new Image();
+  img.onload=()=>{
+    if(!net||net.mode!=='client')return;
+    tctx.clearRect(0,0,TW,TH); tctx.drawImage(img,0,0);
+    for(const op of net.opQ) applyOp(op,true);
+    net.opQ=[]; refreshMask(); net.ready=true;
+  };
+  img.src=m.png;
+  curIdx=0; phase='resolve'; running=true;
+  for(const id of ['menu','lobby','results']) $(id).classList.add('hidden');
+}
+function applyOp(ev,defer){
+  if(ev.e==='carve') carve(ev.x,ev.y,ev.r);
+  else if(ev.e==='build') buildAt(ev.x,ev.y,ev.r,ev.f,true);
+  else if(ev.e==='rect'){
+    tctx.save();tctx.globalCompositeOperation='destination-out';
+    tctx.fillRect(ev.x,ev.y,ev.w,ev.h);tctx.restore();
+  }
+  if(!defer) refreshMask();
+}
+function applyEvent(ev){
+  if(ev.e==='carve'||ev.e==='build'||ev.e==='rect'){
+    if(!net.ready){ net.opQ.push(ev); return; }
+    applyOp(ev,true); net.maskDirty=true;
+  }
+  else if(ev.e==='boom'){
+    for(let i=0;i<(ev.big?30:16);i++)
+      parts.push({x:ev.x,y:ev.y,vx:rand(-280,280),vy:rand(-330,80),t:rand(.3,.8),max:.8,type:'spark',color:ev.c});
+    parts.push({x:ev.x,y:ev.y,t:.3,max:.3,type:'flash',r:ev.r});
+    shake=Math.min(16,shake+(ev.big?12:5));
+    ev.big?SFX.boomBig():SFX.boom();
+  }
+  else if(ev.e==='splash'){ splashAt(ev.x); }
+  else if(ev.e==='feed'){ addFeed(ev.x,ev.c); }
+  else if(ev.e==='dmg'){ addDmg(ev.x,ev.y,ev.n,ev.c); if(ev.n>0)SFX.hurt(); }
+  else if(ev.e==='sfx'){ if(SFX[ev.s])SFX[ev.s](); }
+}
+function applySnap(m){
+  phase=m.ph; turnTime=m.tt; waterY=m.wy; sudden=!!m.sd; stamina=m.st;
+  net.curId=m.cur;
+  const ci=wizards.findIndex(z=>z.id===m.cur);
+  if(ci>=0)curIdx=ci;
+  const key=m.ph+'|'+m.cur;
+  if(key!==net.prevKey){
+    net.prevKey=key;
+    if(m.ph==='aim'&&m.cur===net.myId){
+      net.sentCast=false; charging=false; charge=0;
+      const me=wizards[curIdx];
+      selSpell=0;
+      for(let i=0;i<me.spells.length;i++) if(spellReady(me,i)){selSpell=i;break;}
+    }
+  }
+  for(const row of m.w){
+    const z=wizards.find(x=>x.id===row[0]); if(!z)continue;
+    if(z.tx===undefined){ z.x=row[1]; z.y=row[2]; }
+    z.tx=row[1]; z.ty=row[2];
+    z.hp=row[3]; z.shield=row[4]; z.frozen=!!row[5]; z.alive=!!row[6]; z.facing=row[7]||1;
+    row[8].forEach((s2,i)=>{ if(z.spells[i]){ z.spells[i].cd=s2[0]; z.spells[i].uses=s2[1]<0?Infinity:s2[1]; } });
+  }
+  m.g.forEach((r,i)=>{
+    let g2=golems[i];
+    if(!g2){ g2={x:r[0],y:r[1]}; golems[i]=g2; }
+    g2.tx=r[0]; g2.ty=r[1]; g2.hp=r[2]; g2.maxHp=r[3]; g2.kind=r[4]?'treant':'golem';
+  });
+  golems.length=m.g.length;
+  m.p.forEach((r,i)=>{
+    let p=projectiles[i];
+    if(!p||p.spell.color!==r[2]){ p={x:r[0],y:r[1],spell:{color:r[2]},trail:[]}; projectiles[i]=p; }
+    p.tx=r[0]; p.ty=r[1];
+  });
+  projectiles.length=m.p.length;
+  for(const ev of (m.e||[])) applyEvent(ev);
+  if(net.maskDirty){ refreshMask(); net.maskDirty=false; }
+}
+function clientEnd(m){
+  phase='over';
+  const win=wizards.find(z=>z.id===m.winner);
+  $('resultBanner').textContent=win?(win.id===net.myId?'VICTORY!':'DEFEAT'):'MUTUAL DESTRUCTION';
+  $('resultBanner').style.color=win&&win.id===net.myId?'#ffd54d':'#4da3ff';
+  $('resultSub').textContent=win?`${win.name} rules the battlefield — waiting for the host to rematch…`:'no wizard survived';
+  $('againBtn').classList.add('hidden');
+  $('results').classList.remove('hidden');
+}
+function clientUpdate(dt){
+  shake=Math.max(0,shake-dt*30);
+  for(const z of wizards){
+    if(z.tx!==undefined){ z.x=lerp(z.x,z.tx,Math.min(1,dt*10)); z.y=lerp(z.y,z.ty,Math.min(1,dt*10)); }
+    z.sayT=Math.max(0,(z.sayT||0)-dt);
+  }
+  for(const g2 of golems){
+    if(g2.tx!==undefined){ g2.x=lerp(g2.x,g2.tx,Math.min(1,dt*8)); g2.y=lerp(g2.y,g2.ty,Math.min(1,dt*8)); }
+  }
+  for(const p of projectiles){
+    if(p.tx!==undefined){ p.x=lerp(p.x,p.tx,Math.min(1,dt*14)); p.y=lerp(p.y,p.ty,Math.min(1,dt*14)); }
+    p.trail.push({x:p.x,y:p.y}); if(p.trail.length>10)p.trail.shift();
+  }
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i]; p.t-=dt;
+    if(p.t<=0){parts.splice(i,1);continue;}
+    if(p.vx!==undefined){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=(p.type==='drop'?700:400)*dt;}
+  }
+  for(let i=dmgNums.length-1;i>=0;i--){dmgNums[i].t-=dt;dmgNums[i].y-=28*dt;if(dmgNums[i].t<=0)dmgNums.splice(i,1);}
+  for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt;if(feed[i].t<=0)feed.splice(i,1);}
+  for(let i=chats.length-1;i>=0;i--){chats[i].t-=dt;if(chats[i].t<=0)chats.splice(i,1);}
+  // camera
+  const cw=wizards[curIdx];
+  if(projectiles.length){ camTX=projectiles[0].x; camTY=projectiles[0].y; }
+  else if(cw){ camTX=cw.x; camTY=cw.y; }
+  camX=lerp(camX,camTX,Math.min(1,dt*4)); camY=lerp(camY,camTY,Math.min(1,dt*4));
+  turnTime=Math.max(0,turnTime-dt);
+  // my aim input
+  const me=wizards.find(z=>z.id===net.myId);
+  if(me&&phase==='aim'&&net.curId===net.myId&&!net.sentCast){
+    if(charging)charge=Math.min(100,charge+90*dt);
+    let mv=0;
+    if(keys['a']||keys['arrowleft'])mv=-1;
+    if(keys['d']||keys['arrowright'])mv=1;
+    if(mv!==net.walkOut){ net.walkOut=mv; try{net.conn&&net.conn.open&&net.conn.send({t:'walk',mv});}catch(e){} }
+  } else if(net.walkOut){
+    net.walkOut=0;
+    try{net.conn&&net.conn.open&&net.conn.send({t:'walk',mv:0});}catch(e){}
+  }
+}
 
 /* test hook */
 window.__ss={
   state:()=>({phase,turn:wizards.length?cur().name:null,
+    net:net?{mode:net.mode,myId:net.myId,ready:net.ready,curId:net.curId}:null,
+    waterY:Math.round(waterY),sudden,turnCount,
     wizards:wizards.map(z=>({n:z.name,hp:Math.round(z.hp),x:Math.round(z.x),y:Math.round(z.y),
-      alive:z.alive,book:z.book,frozen:z.frozen,shield:z.shield})),
+      alive:z.alive,book:z.book,frozen:z.frozen,shield:z.shield,
+      spells:z.spells.map(sl=>sl.id+' cd'+sl.cd+' u'+(sl.uses===Infinity?'inf':sl.uses))})),
+    chats:chats.map(c=>c.name+': '+c.text),
     projectiles:projectiles.length,golems:golems.length}),
+  sudden:()=>{turnCount=SUDDEN_AT;},
   cast:(i,angle,power)=>{ const w=cur(); if(phase==='aim'&&!w.casted&&spellReady(w,i)) castSpell(w,i,{angle,power,tx:w.x+Math.cos(angle)*200,ty:w.y+Math.sin(angle)*200}); },
   step:n=>{ for(let i=0;i<n;i++)update(1/120); },
   solidAt,
@@ -1186,9 +1723,14 @@ const STEP=1/120;
 function tick(t,hidden){
   const dt=Math.min(0.25,Math.max(0,(t-lastT)/1000));
   lastT=t;
-  if(running&&phase!=='menu'&&phase!=='over'){
+  if(running&&phase!=='menu'){
     acc=Math.min(acc+dt,0.25);
-    while(acc>=STEP){update(STEP);acc-=STEP;}
+    if(net&&net.mode==='client'){
+      while(acc>=STEP){clientUpdate(STEP);acc-=STEP;}
+    } else if(phase!=='over'){
+      while(acc>=STEP){update(STEP);acc-=STEP;}
+      if(net&&net.mode==='host')netHostFlush(dt);
+    } else acc=0;
   } else acc=0;
   if(!hidden)render();
 }
