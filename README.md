@@ -1,5 +1,9 @@
 # Stick Arena — Single Player & Online
 
+> Also in this repo: **[Spellstorm](spellstorm.html)** — an original turn-based
+> wizard-artillery game (destructible terrain, 4 spellbooks, bots, hotseat
+> multiplayer). Play it at `spellstorm.html` on the same site.
+
 A fan remake of XGen Studios' *Stick Arena*: top-down stick-figure deathmatch.
 Play solo against AI bots, or host an online match for your friends — no
 servers to run, ever.
