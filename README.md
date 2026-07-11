@@ -30,6 +30,16 @@ bots fill out the rest of the arena.
 victim), Chain Gun (bullet hose), Flamethrower (short-range cone of fire),
 Rail Gun (piercing beam that hits everything in a line).
 
+## Other features
+
+- **Chat**: press Enter to talk — messages show in the log and as speech
+  bubbles. Bots talk trash on their own.
+- **Lava**: the Meltdown, Runoff and Foundry maps have molten hazard tiles.
+  Crossing is survivable in a sprint; standing still is not. Knock enemies in.
+- **Melee lunge**: every swing hops you forward, like the original.
+- Six maps, permanent blood decals, corpse animations, and death by lava
+  ("X melted in the lava") in the kill feed.
+
 ## Controls
 
 | Input | Action |
