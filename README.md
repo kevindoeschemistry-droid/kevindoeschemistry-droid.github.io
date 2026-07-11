@@ -1,9 +1,16 @@
-# Stick Arena — Single Player & Online
+# The Revival Arcade
 
-> Also in this repo: **[Spellstorm](spellstorm.html)** — an original turn-based
-> wizard-artillery game: destructible terrain, 5 spellbooks (including Verdant
-> healing magic), bots, hotseat, **online rooms with 4-letter codes**, in-game
-> chat, and sudden-death rising seas. Play it at `spellstorm.html` on the same site.
+Original fan tributes to dead multiplayer classics — playable from one link,
+no downloads, online rooms with 4-letter codes.
+
+- **[Stick Arena](stick-arena/)** — top-down stick-figure deathmatch (this doc)
+- **[Spellstorm](spellstorm/)** — turn-based wizard artillery: destructible
+  terrain, 5 spellbooks (including Verdant healing magic), bots, hotseat,
+  online rooms, chat, and sudden-death rising seas
+
+---
+
+# Stick Arena — Single Player & Online
 
 A fan remake of XGen Studios' *Stick Arena*: top-down stick-figure deathmatch.
 Play solo against AI bots, or host an online match for your friends — no
