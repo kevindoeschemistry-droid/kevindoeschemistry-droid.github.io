@@ -1,0 +1,21 @@
+{
+  "manifestVersion": 1,
+  "id": "wiki-sync",
+  "name": "Wiki Sync",
+  "author": "Kevin Braza",
+  "repoUrl": "https://github.com/kevindoeschemistry/wiki",
+  "enableOnMobile": true,
+  "version": {
+    "major": 0,
+    "minor": 2,
+    "patch": 0
+  },
+  "description": "Syncs flashcards from wiki.kevindoeschemistry.com into RemNote, plus Kuta-style ODE drill cards that generate a new auto-checked problem every review",
+  "requestNative": true,
+  "requiredScopes": [
+    {
+      "type": "All",
+      "level": "ReadCreateModify"
+    }
+  ]
+}
